@@ -29,14 +29,24 @@ jobs:
   web-ci:
     name: Frontend build
     runs-on: ubuntu-latest
-    if: hashFiles('web/package.json') != ''
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - id: check
+        run: |
+          if [ -f web/package.json ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.check.outputs.exists == 'true'
+        uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      - run: cd web && npm ci
+      - if: steps.check.outputs.exists == 'true'
+        run: cd web && npm ci
 
-      - run: cd web && npm run build
+      - if: steps.check.outputs.exists == 'true'
+        run: cd web && npm run build
