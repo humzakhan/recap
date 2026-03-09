@@ -1,0 +1,38 @@
+{
+  "name": "youtube-video",
+  "description": "Extract structured data from YouTube videos",
+  "fields": [
+    {
+      "label": "title",
+      "type": "text"
+    },
+    {
+      "label": "channel",
+      "type": "text"
+    },
+    {
+      "label": "published_at",
+      "type": "date"
+    },
+    {
+      "label": "duration_minutes",
+      "type": "number"
+    },
+    {
+      "label": "summary",
+      "type": "paragraph"
+    },
+    {
+      "label": "key_takeaways",
+      "type": "list"
+    },
+    {
+      "label": "topics_covered",
+      "type": "list"
+    },
+    {
+      "label": "is_tutorial",
+      "type": "boolean"
+    }
+  ]
+}

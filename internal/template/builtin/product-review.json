@@ -1,0 +1,34 @@
+{
+  "name": "product-review",
+  "description": "Extract structured data from product reviews",
+  "fields": [
+    {
+      "label": "product_name",
+      "type": "text"
+    },
+    {
+      "label": "reviewer",
+      "type": "text"
+    },
+    {
+      "label": "rating",
+      "type": "number"
+    },
+    {
+      "label": "pros",
+      "type": "list"
+    },
+    {
+      "label": "cons",
+      "type": "list"
+    },
+    {
+      "label": "verdict",
+      "type": "paragraph"
+    },
+    {
+      "label": "recommended",
+      "type": "boolean"
+    }
+  ]
+}
