@@ -10,17 +10,36 @@ import (
 
 // Config holds the application configuration.
 type Config struct {
-	AnthropicAPIKey string       `yaml:"anthropic_api_key"`
-	Model           string       `yaml:"model"`
-	MaxTokens       int          `yaml:"max_tokens"`
-	DefaultFormat   string       `yaml:"default_format"`
-	Server          ServerConfig `yaml:"server"`
+	// Deprecated: use APIKeys["anthropic"] instead. Kept for backward compat
+	// when reading existing config files.
+	AnthropicAPIKey string `yaml:"anthropic_api_key,omitempty"`
+
+	Model         string            `yaml:"model"`
+	MaxTokens     int               `yaml:"max_tokens"`
+	DefaultFormat string            `yaml:"default_format"`
+	Server        ServerConfig      `yaml:"server"`
+	APIKeys       map[string]string `yaml:"api_keys,omitempty"`
 }
 
 // ServerConfig holds HTTP server configuration.
 type ServerConfig struct {
 	Port int    `yaml:"port"`
 	Host string `yaml:"host"`
+}
+
+// ProviderAPIKey returns the API key for the given provider, checking the
+// APIKeys map first, then falling back to the legacy AnthropicAPIKey field.
+func (c *Config) ProviderAPIKey(provider string) string {
+	if c.APIKeys != nil {
+		if key, ok := c.APIKeys[provider]; ok && key != "" {
+			return key
+		}
+	}
+	// Legacy fallback: if looking up anthropic and only the old field is set.
+	if provider == "anthropic" && c.AnthropicAPIKey != "" {
+		return c.AnthropicAPIKey
+	}
+	return ""
 }
 
 // defaults returns a Config populated with default values.
@@ -33,6 +52,7 @@ func defaults() *Config {
 			Port: 8080,
 			Host: "127.0.0.1",
 		},
+		APIKeys: make(map[string]string),
 	}
 }
 
@@ -64,6 +84,16 @@ func Load() (*Config, error) {
 
 	// Override with environment variables
 	applyEnv(cfg)
+
+	// Migrate legacy anthropic_api_key into APIKeys map.
+	if cfg.AnthropicAPIKey != "" && cfg.ProviderAPIKey("anthropic") == cfg.AnthropicAPIKey {
+		if cfg.APIKeys == nil {
+			cfg.APIKeys = make(map[string]string)
+		}
+		if cfg.APIKeys["anthropic"] == "" {
+			cfg.APIKeys["anthropic"] = cfg.AnthropicAPIKey
+		}
+	}
 
 	return cfg, nil
 }
@@ -105,12 +135,36 @@ func merge(dst, src *Config) {
 	if src.Server.Host != "" {
 		dst.Server.Host = src.Server.Host
 	}
+	for k, v := range src.APIKeys {
+		if v != "" {
+			if dst.APIKeys == nil {
+				dst.APIKeys = make(map[string]string)
+			}
+			dst.APIKeys[k] = v
+		}
+	}
 }
 
 // applyEnv overrides config values from environment variables.
 func applyEnv(cfg *Config) {
 	if v := os.Getenv("RECAP_ANTHROPIC_KEY"); v != "" {
 		cfg.AnthropicAPIKey = v
+		if cfg.APIKeys == nil {
+			cfg.APIKeys = make(map[string]string)
+		}
+		cfg.APIKeys["anthropic"] = v
+	}
+	if v := os.Getenv("RECAP_OPENAI_KEY"); v != "" {
+		if cfg.APIKeys == nil {
+			cfg.APIKeys = make(map[string]string)
+		}
+		cfg.APIKeys["openai"] = v
+	}
+	if v := os.Getenv("RECAP_GOOGLE_KEY"); v != "" {
+		if cfg.APIKeys == nil {
+			cfg.APIKeys = make(map[string]string)
+		}
+		cfg.APIKeys["google"] = v
 	}
 	if v := os.Getenv("RECAP_MODEL"); v != "" {
 		cfg.Model = v
@@ -133,16 +187,28 @@ func applyEnv(cfg *Config) {
 	}
 }
 
-// Redact returns a copy of the config with the API key masked for safe display.
-// Shows the first 8 characters followed by "..." or "not set" if the key is empty.
+// Redact returns a copy of the config with API keys masked for safe display.
 func Redact(cfg *Config) Config {
 	redacted := *cfg
-	if redacted.AnthropicAPIKey == "" {
-		redacted.AnthropicAPIKey = "not set"
-	} else if len(redacted.AnthropicAPIKey) > 8 {
-		redacted.AnthropicAPIKey = redacted.AnthropicAPIKey[:8] + "..."
-	} else {
-		redacted.AnthropicAPIKey = redacted.AnthropicAPIKey + "..."
+	redacted.AnthropicAPIKey = redactKey(cfg.AnthropicAPIKey)
+
+	if len(cfg.APIKeys) > 0 {
+		redacted.APIKeys = make(map[string]string, len(cfg.APIKeys))
+		for k, v := range cfg.APIKeys {
+			redacted.APIKeys[k] = redactKey(v)
+		}
 	}
+
 	return redacted
+}
+
+// redactKey masks an API key for safe display.
+func redactKey(key string) string {
+	if key == "" {
+		return "not set"
+	}
+	if len(key) > 8 {
+		return key[:8] + "..."
+	}
+	return key + "..."
 }

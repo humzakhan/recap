@@ -12,7 +12,7 @@ recap works as a **CLI** for scripting and automation, an **HTTP API** for integ
 
 - **Go 1.25+** — [install](https://go.dev/dl/)
 - **Node.js 20+** — [install](https://nodejs.org/) (only needed for the web UI)
-- **An Anthropic API key** — [get one](https://console.anthropic.com/settings/keys)
+- **An API key** for at least one supported AI provider (see [Supported Models](#supported-models))
 - **ffmpeg** (optional) — only needed if you want to transcribe video/audio files
 
 ### Install & Build
@@ -34,15 +34,40 @@ cd web && npm install && cd ..
 
 ### Set Your API Key
 
+Set an API key for the provider you want to use:
+
 ```bash
+# Anthropic (default)
 export RECAP_ANTHROPIC_KEY=sk-ant-...
+
+# OpenAI
+export RECAP_OPENAI_KEY=sk-...
+
+# Google
+export RECAP_GOOGLE_KEY=AIza...
 ```
 
 Or create `~/.recap/config.yaml`:
 
 ```yaml
-anthropic_api_key: sk-ant-...
+model: claude-sonnet-4-20250514
+api_keys:
+  anthropic: sk-ant-...
+  openai: sk-...
+  google: AIza...
 ```
+
+To switch models:
+
+```bash
+# Via environment variable
+export RECAP_MODEL=gpt-4o
+
+# Or in config.yaml
+model: gemini-2.5-pro
+```
+
+Run `recap config models` to see all available models and which one is currently selected.
 
 ### Run Your First Extraction
 
@@ -114,9 +139,32 @@ recap serve --port 3001  # Custom port
 ### `recap config`
 
 ```bash
-recap config show        # Show current config (API key redacted)
+recap config show        # Show current config (API keys redacted)
 recap config set <key> <value>
+recap config models      # List available AI models
 ```
+
+## Supported Models
+
+recap supports multiple AI providers. Set `RECAP_MODEL` to any of these model IDs:
+
+| Provider | Model ID | Name |
+|----------|----------|------|
+| Anthropic | `claude-sonnet-4-20250514` | Claude Sonnet 4 (default) |
+| Anthropic | `claude-opus-4-20250514` | Claude Opus 4 |
+| Anthropic | `claude-haiku-4-20250514` | Claude Haiku 4 |
+| OpenAI | `gpt-4o` | GPT-4o |
+| OpenAI | `gpt-4o-mini` | GPT-4o Mini |
+| OpenAI | `o3` | O3 |
+| OpenAI | `o3-mini` | O3 Mini |
+| OpenAI | `o4-mini` | O4 Mini |
+| Google | `gemini-2.5-pro` | Gemini 2.5 Pro |
+| Google | `gemini-2.5-flash` | Gemini 2.5 Flash |
+| Google | `gemini-2.0-flash` | Gemini 2.0 Flash |
+
+You can also pass any model string not in this list — the provider will be inferred from the model name prefix (`claude-*` → Anthropic, `gpt-*`/`o3-*`/`o4-*` → OpenAI, `gemini-*` → Google).
+
+Each provider requires its own API key. You only need to configure the key for the provider you're using.
 
 ## Built-in Templates
 
@@ -140,6 +188,7 @@ All endpoints are under `/api/v1`.
 | `GET` | `/templates/:name` | Get a template by name |
 | `POST` | `/templates` | Create a user template |
 | `DELETE` | `/templates/:name` | Delete a user template |
+| `GET` | `/models` | List available AI models |
 
 **Example extraction request:**
 
@@ -199,13 +248,14 @@ Config is loaded in priority order (highest wins):
 
 | Variable | Config Key | Default |
 |----------|-----------|---------|
-| `RECAP_ANTHROPIC_KEY` | `anthropic_api_key` | (required) |
+| `RECAP_ANTHROPIC_KEY` | `api_keys.anthropic` | — |
+| `RECAP_OPENAI_KEY` | `api_keys.openai` | — |
+| `RECAP_GOOGLE_KEY` | `api_keys.google` | — |
 | `RECAP_MODEL` | `model` | `claude-sonnet-4-20250514` |
 | `RECAP_MAX_TOKENS` | `max_tokens` | `4096` |
 | `RECAP_DEFAULT_FORMAT` | `default_format` | `json` |
 | `RECAP_PORT` | `server.port` | `8080` |
 | `RECAP_HOST` | `server.host` | `127.0.0.1` |
-| `RECAP_OPENAI_KEY` | — | (required for audio/video) |
 | `RECAP_ALLOWED_ORIGINS` | — | `http://localhost:3000` |
 | `RECAP_RATE_LIMIT` | — | `10` (requests/min for /extract) |
 

@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
+	"github.com/humzakhan/recap/internal/aiclient"
 	"github.com/humzakhan/recap/internal/config"
 	"github.com/humzakhan/recap/internal/extractor"
 	"github.com/humzakhan/recap/internal/fetcher"
@@ -43,6 +46,27 @@ func rootCmd() *cobra.Command {
 	root.AddCommand(configCmd())
 
 	return root
+}
+
+// buildAIClient creates an AIClient from the loaded config.
+func buildAIClient(cfg *config.Config) (aiclient.AIClient, error) {
+	// Determine provider from model.
+	provider := ""
+	if info, ok := aiclient.LookupModel(cfg.Model); ok {
+		provider = info.Provider
+	} else {
+		provider = aiclient.InferProvider(cfg.Model)
+	}
+	if provider == "" {
+		return nil, fmt.Errorf("cannot determine provider for model %q; set the model to a known model or configure api_keys in config", cfg.Model)
+	}
+
+	apiKey := cfg.ProviderAPIKey(provider)
+	return aiclient.New(aiclient.ProviderConfig{
+		Provider: provider,
+		APIKey:   apiKey,
+		Model:    cfg.Model,
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -93,8 +117,10 @@ func runCmd() *cobra.Command {
 				return fmt.Errorf("loading config: %w", err)
 			}
 
-			if cfg.AnthropicAPIKey == "" {
-				return fmt.Errorf("no API key configured; set RECAP_ANTHROPIC_KEY or configure via ~/.recap/config.yaml")
+			// Build AI client.
+			client, err := buildAIClient(cfg)
+			if err != nil {
+				return err
 			}
 
 			// Determine output format.
@@ -104,7 +130,7 @@ func runCmd() *cobra.Command {
 			}
 
 			// Create extractor and run.
-			ext := extractor.NewExtractor(fetcherAdapter{}, cfg.AnthropicAPIKey, cfg.Model, cfg.MaxTokens)
+			ext := extractor.NewExtractor(fetcherAdapter{}, client, cfg.MaxTokens)
 			result, err := ext.Extract(context.Background(), extractor.ExtractionRequest{
 				URL:    url,
 				Fields: fields,
@@ -350,12 +376,14 @@ func serveCmd() *cobra.Command {
 				cfg.Server.Host = host
 			}
 
-			if cfg.AnthropicAPIKey == "" {
-				return fmt.Errorf("no API key configured; set RECAP_ANTHROPIC_KEY or configure via ~/.recap/config.yaml")
+			// Validate that at least one API key is configured.
+			client, err := buildAIClient(cfg)
+			if err != nil {
+				return err
 			}
 
-			fmt.Printf("Starting server on %s:%d\n", cfg.Server.Host, cfg.Server.Port)
-			srv := server.New(cfg)
+			fmt.Printf("Starting server on %s:%d (model: %s)\n", cfg.Server.Host, cfg.Server.Port, cfg.Model)
+			srv := server.New(cfg, client)
 			return srv.Run()
 		},
 	}
@@ -378,6 +406,7 @@ func configCmd() *cobra.Command {
 
 	cmd.AddCommand(configShowCmd())
 	cmd.AddCommand(configSetCmd())
+	cmd.AddCommand(configModelsCmd())
 
 	return cmd
 }
@@ -385,7 +414,7 @@ func configCmd() *cobra.Command {
 func configShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show",
-		Short: "Show current configuration (API key redacted)",
+		Short: "Show current configuration (API keys redacted)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load()
 			if err != nil {
@@ -410,6 +439,53 @@ func configSetCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("config set not yet implemented")
+			return nil
+		},
+	}
+}
+
+func configModelsCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "models",
+		Short: "List available AI models",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
+
+			grouped := aiclient.ModelsByProvider()
+
+			// Sort provider names for consistent output.
+			providers := make([]string, 0, len(grouped))
+			for p := range grouped {
+				providers = append(providers, p)
+			}
+			sort.Strings(providers)
+
+			for _, provider := range providers {
+				models := grouped[provider]
+				hasKey := cfg.ProviderAPIKey(provider) != ""
+
+				keyStatus := "(no API key)"
+				if hasKey {
+					keyStatus = "(configured)"
+				}
+				fmt.Printf("%s %s\n", strings.ToUpper(provider), keyStatus)
+
+				for _, m := range models {
+					marker := "  "
+					if m.ID == cfg.Model {
+						marker = "* "
+					}
+					fmt.Printf("  %s%-35s %s\n", marker, m.ID, m.Name)
+				}
+				fmt.Println()
+			}
+
+			fmt.Printf("Current model: %s\n", cfg.Model)
+			fmt.Println("Change with: RECAP_MODEL=<model-id> or set 'model' in ~/.recap/config.yaml")
+
 			return nil
 		},
 	}

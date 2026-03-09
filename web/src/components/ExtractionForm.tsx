@@ -1,10 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { extract } from "@/lib/api";
 import { useExtractionStore } from "@/lib/stores";
 import { useHistoryStore } from "@/lib/stores";
 import { FieldBuilder } from "./FieldBuilder";
 import { TemplateSelector } from "./TemplateSelector";
+import { ModelSelector } from "./ModelSelector";
 import type { Field } from "@/lib/api";
 
 export function ExtractionForm() {
@@ -19,6 +21,7 @@ export function ExtractionForm() {
     setError,
   } = useExtractionStore();
   const { addEntry } = useHistoryStore();
+  const [selectedModel, setSelectedModel] = useState("");
 
   const canSubmit =
     status !== "loading" &&
@@ -55,6 +58,8 @@ export function ExtractionForm() {
           className="mt-1 w-full rounded-md border border-gray-300 px-4 py-3 text-base focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
       </div>
+
+      <ModelSelector selectedModel={selectedModel} onModelChange={setSelectedModel} />
 
       <TemplateSelector onSelect={handleTemplateSelect} />
 

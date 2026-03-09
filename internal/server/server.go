@@ -7,24 +7,26 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/humzakhan/recap/internal/aiclient"
 	"github.com/humzakhan/recap/internal/config"
 )
 
 // Server holds the Gin router and application configuration.
 type Server struct {
-	Router *gin.Engine
-	Config *config.Config
+	Router   *gin.Engine
+	Config   *config.Config
+	AIClient aiclient.AIClient
 }
 
 // New creates a new Server with the given configuration, sets up CORS and routes.
-func New(cfg *config.Config) *Server {
+func New(cfg *config.Config, client aiclient.AIClient) *Server {
 	gin.SetMode(gin.ReleaseMode)
 
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(gin.Logger())
 
-	s := &Server{Router: router, Config: cfg}
+	s := &Server{Router: router, Config: cfg, AIClient: client}
 	s.setupCORS()
 	s.setupRoutes()
 
@@ -76,6 +78,7 @@ func (s *Server) setupRoutes() {
 	v1.GET("/templates/:name", s.handleGetTemplate)
 	v1.POST("/templates", s.handleCreateTemplate)
 	v1.DELETE("/templates/:name", s.handleDeleteTemplate)
+	v1.GET("/models", s.handleListModels)
 }
 
 // parseRateLimit reads the RECAP_RATE_LIMIT env var, defaulting to 10 requests

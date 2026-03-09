@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,8 +10,20 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/humzakhan/recap/internal/aiclient"
 	"github.com/humzakhan/recap/internal/config"
 )
+
+// mockAIClient is a simple mock for testing.
+type mockAIClient struct{}
+
+func (m *mockAIClient) Complete(ctx context.Context, req aiclient.CompletionRequest) (*aiclient.CompletionResponse, error) {
+	return &aiclient.CompletionResponse{
+		Text:       `{"title": "Test"}`,
+		TokensUsed: 100,
+		Model:      "test-model",
+	}, nil
+}
 
 func testServer() *Server {
 	cfg := &config.Config{
@@ -19,8 +32,9 @@ func testServer() *Server {
 		MaxTokens:       100,
 		DefaultFormat:   "json",
 		Server:          config.ServerConfig{Port: 0, Host: "127.0.0.1"},
+		APIKeys:         map[string]string{"anthropic": "test-key"},
 	}
-	return New(cfg)
+	return New(cfg, &mockAIClient{})
 }
 
 func TestHealthEndpoint(t *testing.T) {
@@ -210,5 +224,33 @@ func TestRateLimiter(t *testing.T) {
 
 	if w.Code != http.StatusTooManyRequests {
 		t.Fatalf("request 3: expected status 429, got %d", w.Code)
+	}
+}
+
+func TestListModels(t *testing.T) {
+	s := testServer()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/models", nil)
+	w := httptest.NewRecorder()
+	s.Router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		Models  []aiclient.ModelInfo `json:"models"`
+		Current string               `json:"current"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	if len(resp.Models) == 0 {
+		t.Fatal("expected non-empty models list")
+	}
+
+	if resp.Current != "test-model" {
+		t.Errorf("current: got %q, want %q", resp.Current, "test-model")
 	}
 }

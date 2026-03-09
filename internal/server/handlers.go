@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/humzakhan/recap/internal/aiclient"
 	"github.com/humzakhan/recap/internal/extractor"
 	"github.com/humzakhan/recap/internal/fetcher"
 	"github.com/humzakhan/recap/internal/template"
@@ -100,11 +101,10 @@ func (s *Server) handleExtract(c *gin.Context) {
 		format = "json"
 	}
 
-	// Build and run the extraction.
+	// Build and run the extraction using the server's AI client.
 	ext := extractor.NewExtractor(
 		fetcherAdapter{},
-		s.Config.AnthropicAPIKey,
-		s.Config.Model,
+		s.AIClient,
 		s.Config.MaxTokens,
 	)
 
@@ -223,6 +223,18 @@ func (s *Server) handleDeleteTemplate(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("template %q deleted", name)})
+}
+
+// handleListModels returns all known models grouped by provider.
+func (s *Server) handleListModels(c *gin.Context) {
+	type modelResponse struct {
+		Models  []aiclient.ModelInfo `json:"models"`
+		Current string               `json:"current"`
+	}
+	c.JSON(http.StatusOK, modelResponse{
+		Models:  aiclient.KnownModels,
+		Current: s.Config.Model,
+	})
 }
 
 // --------------------------------------------------------------------------
