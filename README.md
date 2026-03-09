@@ -32,42 +32,20 @@ make build
 cd web && npm install && cd ..
 ```
 
-### Set Your API Key
-
-Set an API key for the provider you want to use:
+### Configure Your API Key
 
 ```bash
-# Anthropic (default)
-export RECAP_ANTHROPIC_KEY=sk-ant-...
+# Set an API key for the provider you want to use
+recap config set api_keys.anthropic sk-ant-...   # Anthropic (default)
+recap config set api_keys.openai sk-...          # OpenAI
+recap config set api_keys.google AIza...         # Google
 
-# OpenAI
-export RECAP_OPENAI_KEY=sk-...
+# Switch models
+recap config set model gpt-4o
 
-# Google
-export RECAP_GOOGLE_KEY=AIza...
+# See all available models
+recap config models
 ```
-
-Or create `~/.recap/config.yaml`:
-
-```yaml
-model: claude-sonnet-4-20250514
-api_keys:
-  anthropic: sk-ant-...
-  openai: sk-...
-  google: AIza...
-```
-
-To switch models:
-
-```bash
-# Via environment variable
-export RECAP_MODEL=gpt-4o
-
-# Or in config.yaml
-model: gemini-2.5-pro
-```
-
-Run `recap config models` to see all available models and which one is currently selected.
 
 ### Run Your First Extraction
 
@@ -239,12 +217,9 @@ recap/
 
 ## Configuration
 
-Config is loaded in priority order (highest wins):
+Use `recap config set <key> <value>` to configure recap. Run `recap config show` to see current settings.
 
-1. Environment variables (`RECAP_ANTHROPIC_KEY`, `RECAP_MODEL`, `RECAP_PORT`, etc.)
-2. `~/.recap/config.yaml`
-3. `.recap/config.yaml` in the current directory
-4. Defaults
+All settings can also be overridden with environment variables, which take priority over the config file. This is useful for CI, Docker, or per-session overrides.
 
 | Variable | Config Key | Default |
 |----------|-----------|---------|
