@@ -1,0 +1,41 @@
+{
+  "name": "social-post",
+  "description": "Extract structured data from social media posts",
+  "fields": [
+    {
+      "label": "author_handle",
+      "type": "text"
+    },
+    {
+      "label": "author_name",
+      "type": "text"
+    },
+    {
+      "label": "posted_at",
+      "type": "date"
+    },
+    {
+      "label": "main_claim",
+      "type": "paragraph"
+    },
+    {
+      "label": "tone",
+      "type": "enum",
+      "options": [
+        "informational",
+        "opinion",
+        "promotional",
+        "humorous",
+        "controversial"
+      ]
+    },
+    {
+      "label": "mentions",
+      "type": "list"
+    },
+    {
+      "label": "hashtags",
+      "type": "list"
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "name": "research-paper",
+  "description": "Extract structured data from research papers",
+  "fields": [
+    {
+      "label": "title",
+      "type": "text"
+    },
+    {
+      "label": "authors",
+      "type": "list"
+    },
+    {
+      "label": "published_at",
+      "type": "date"
+    },
+    {
+      "label": "abstract",
+      "type": "paragraph"
+    },
+    {
+      "label": "methodology",
+      "type": "paragraph"
+    },
+    {
+      "label": "key_findings",
+      "type": "list"
+    },
+    {
+      "label": "limitations",
+      "type": "list"
+    },
+    {
+      "label": "field",
+      "type": "text"
+    }
+  ]
+}

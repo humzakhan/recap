@@ -1,0 +1,43 @@
+{
+  "name": "news-article",
+  "description": "Extract structured data from news articles",
+  "fields": [
+    {
+      "label": "headline",
+      "type": "text"
+    },
+    {
+      "label": "author",
+      "type": "text"
+    },
+    {
+      "label": "publication",
+      "type": "text"
+    },
+    {
+      "label": "published_at",
+      "type": "date"
+    },
+    {
+      "label": "summary",
+      "type": "paragraph"
+    },
+    {
+      "label": "key_points",
+      "type": "list"
+    },
+    {
+      "label": "sentiment",
+      "type": "enum",
+      "options": [
+        "positive",
+        "negative",
+        "neutral"
+      ]
+    },
+    {
+      "label": "topics",
+      "type": "list"
+    }
+  ]
+}
