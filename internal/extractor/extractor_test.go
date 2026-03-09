@@ -127,8 +127,8 @@ func TestParseResponse_InvalidJSON(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for invalid JSON, got nil")
 	}
-	if !strings.Contains(err.Error(), "failed to parse model response") {
-		t.Errorf("error should contain %q, got: %v", "failed to parse model response", err)
+	if !strings.Contains(err.Error(), "invalid JSON") {
+		t.Errorf("error should contain %q, got: %v", "invalid JSON", err)
 	}
 }
 

@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
 	"github.com/humzakhan/recap/internal/aiclient"
+	"github.com/humzakhan/recap/internal/log"
 )
 
 // Fetcher is the interface for fetching URL content, allowing test mocks.
@@ -36,15 +36,21 @@ func NewExtractor(fetcher Fetcher, client aiclient.AIClient, maxTokens int) *Ext
 // requested fields, and returns the structured extraction result.
 func (e *Extractor) Extract(ctx context.Context, req ExtractionRequest) (*ExtractionResult, error) {
 	// 1. Fetch content from the URL.
+	log.Debug("extractor: fetching content from %q", req.URL)
 	content, err := e.Fetcher.Fetch(ctx, req.URL)
 	if err != nil {
-		return nil, fmt.Errorf("fetch failed: %w", err)
+		return nil, fmt.Errorf("fetch failed for %q: %w", req.URL, err)
 	}
+	log.Debug("extractor: fetched %d chars of %s content (title: %q)", len(content.RawText), content.ContentType, content.Title)
 
 	// 2. Build the LLM prompts.
+	log.Debug("extractor: building prompt for %d fields", len(req.Fields))
 	systemPrompt, userPrompt := BuildPrompt(*content, req.Fields)
+	log.Debug("extractor: system prompt %d chars, user prompt %d chars", len(systemPrompt), len(userPrompt))
 
 	// 3. Call the AI provider.
+	log.Debug("extractor: calling AI provider (max_tokens=%d)", e.MaxTokens)
+	startTime := time.Now()
 	resp, err := e.Client.Complete(ctx, aiclient.CompletionRequest{
 		SystemPrompt: systemPrompt,
 		UserPrompt:   userPrompt,
@@ -53,12 +59,16 @@ func (e *Extractor) Extract(ctx context.Context, req ExtractionRequest) (*Extrac
 	if err != nil {
 		return nil, fmt.Errorf("extraction failed: %w", err)
 	}
+	log.Debug("extractor: AI response received in %s (model=%s, tokens=%d)", time.Since(startTime).Round(time.Millisecond), resp.Model, resp.TokensUsed)
+	log.Debug("extractor: raw response (%d chars): %.200s", len(resp.Text), resp.Text)
 
 	// 4. Parse and validate the response.
+	log.Debug("extractor: parsing and validating response")
 	data, err := parseResponse(resp.Text, req.Fields)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse model output: %w\nRaw response: %.500s", err, resp.Text)
 	}
+	log.Debug("extractor: successfully extracted %d fields", len(data))
 
 	// 5. Build the result.
 	return &ExtractionResult{
@@ -81,7 +91,7 @@ func parseResponse(text string, fields []Field) (map[string]any, error) {
 
 	var raw map[string]any
 	if err := json.Unmarshal([]byte(cleaned), &raw); err != nil {
-		return nil, fmt.Errorf("failed to parse model response: %w", err)
+		return nil, fmt.Errorf("invalid JSON: %w", err)
 	}
 
 	result := make(map[string]any, len(fields))
@@ -90,13 +100,14 @@ func parseResponse(text string, fields []Field) (map[string]any, error) {
 		key := ToSnakeCase(f.Label)
 		val, exists := raw[key]
 		if !exists {
+			log.Debug("extractor: field %q not found in response, setting to null", key)
 			result[key] = nil
 			continue
 		}
 
 		coerced, err := CoerceValue(val, f.Type, f.Options)
 		if err != nil {
-			log.Printf("warning: coercion failed for field %q (type %s): %v; setting to null", key, f.Type, err)
+			log.Warn("coercion failed for field %q (type %s): %v; setting to null", key, f.Type, err)
 			result[key] = nil
 			continue
 		}

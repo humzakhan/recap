@@ -10,17 +10,26 @@ import (
 	"time"
 
 	"github.com/humzakhan/recap/internal/extractor"
+	"github.com/humzakhan/recap/internal/log"
 )
 
 // Fetch routes to the correct fetcher based on the URL.
 func Fetch(ctx context.Context, rawURL string) (*extractor.FetchedContent, error) {
+	log.Debug("fetcher: starting fetch for %q", rawURL)
+
 	// 1. Check if it's a local path.
 	if isLocalPath(rawURL) {
 		localPath := rawURL
 		if strings.HasPrefix(rawURL, "file://") {
 			localPath = strings.TrimPrefix(rawURL, "file://")
 		}
-		return fetchLocal(ctx, localPath)
+		log.Debug("fetcher: detected local path %q", localPath)
+		content, err := fetchLocal(ctx, localPath)
+		if err != nil {
+			return nil, err
+		}
+		log.Debug("fetcher: local fetch complete, %d chars extracted", len(content.RawText))
+		return content, nil
 	}
 
 	// 2. Parse the URL.
@@ -30,22 +39,36 @@ func Fetch(ctx context.Context, rawURL string) (*extractor.FetchedContent, error
 	}
 
 	// 3. Do a HEAD request with a 10-second timeout to check Content-Type.
+	log.Debug("fetcher: sending HEAD request to detect content type")
 	contentType, headErr := headContentType(ctx, rawURL)
+	if headErr != nil {
+		log.Debug("fetcher: HEAD request failed (%v), falling back to extension routing", headErr)
+	} else {
+		log.Debug("fetcher: HEAD Content-Type: %q", contentType)
+	}
 
 	// 4. Route by Content-Type or file extension.
 	if headErr == nil {
 		if result := routeByContentType(ctx, rawURL, parsed, contentType); result != nil {
+			log.Debug("fetcher: routing by Content-Type")
 			return result()
 		}
 	}
 
 	// 5. If HEAD failed or Content-Type didn't match, fall back to extension-based routing.
 	if result := routeByExtension(ctx, rawURL, parsed); result != nil {
+		log.Debug("fetcher: routing by file extension")
 		return result()
 	}
 
 	// 6. Default to HTTP fetch.
-	return fetchHTTP(ctx, rawURL)
+	log.Debug("fetcher: using default HTTP fetch with readability extraction")
+	content, err := fetchHTTP(ctx, rawURL)
+	if err != nil {
+		return nil, err
+	}
+	log.Debug("fetcher: HTTP fetch complete, title=%q, %d chars extracted", content.Title, len(content.RawText))
+	return content, nil
 }
 
 // isLocalPath checks whether the given string looks like a local file path
