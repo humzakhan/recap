@@ -79,3 +79,20 @@ export async function deleteTemplate(name: string): Promise<void> {
   });
   if (!res.ok) throw new Error(`Failed to delete template: ${name}`);
 }
+
+export interface ModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+}
+
+export interface ModelsResponse {
+  models: ModelInfo[];
+  current: string;
+}
+
+export async function getModels(): Promise<ModelsResponse> {
+  const res = await fetch(`${API_BASE}/api/v1/models`);
+  if (!res.ok) throw new Error(`Failed to load models: HTTP ${res.status}`);
+  return res.json();
+}

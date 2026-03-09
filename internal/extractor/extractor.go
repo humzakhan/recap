@@ -8,8 +8,7 @@ import (
 	"strings"
 	"time"
 
-	anthropic "github.com/anthropics/anthropic-sdk-go"
-	"github.com/anthropics/anthropic-sdk-go/option"
+	"github.com/humzakhan/recap/internal/aiclient"
 )
 
 // Fetcher is the interface for fetching URL content, allowing test mocks.
@@ -20,17 +19,15 @@ type Fetcher interface {
 // Extractor holds the configuration needed to perform an extraction.
 type Extractor struct {
 	Fetcher   Fetcher
-	APIKey    string
-	Model     string
+	Client    aiclient.AIClient
 	MaxTokens int
 }
 
-// NewExtractor creates a new Extractor with the given dependencies and config.
-func NewExtractor(fetcher Fetcher, apiKey, model string, maxTokens int) *Extractor {
+// NewExtractor creates a new Extractor with the given dependencies.
+func NewExtractor(fetcher Fetcher, client aiclient.AIClient, maxTokens int) *Extractor {
 	return &Extractor{
 		Fetcher:   fetcher,
-		APIKey:    apiKey,
-		Model:     model,
+		Client:    client,
 		MaxTokens: maxTokens,
 	}
 }
@@ -47,53 +44,31 @@ func (e *Extractor) Extract(ctx context.Context, req ExtractionRequest) (*Extrac
 	// 2. Build the LLM prompts.
 	systemPrompt, userPrompt := BuildPrompt(*content, req.Fields)
 
-	// 3. Call the Anthropic API.
-	client := anthropic.NewClient(option.WithAPIKey(e.APIKey))
-	resp, err := client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.Model(e.Model),
-		MaxTokens: int64(e.MaxTokens),
-		System: []anthropic.TextBlockParam{
-			{Text: systemPrompt},
-		},
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock(userPrompt)),
-		},
+	// 3. Call the AI provider.
+	resp, err := e.Client.Complete(ctx, aiclient.CompletionRequest{
+		SystemPrompt: systemPrompt,
+		UserPrompt:   userPrompt,
+		MaxTokens:    e.MaxTokens,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("extraction failed: %w", err)
 	}
 
-	// 4. Extract text from the response.
-	if len(resp.Content) == 0 {
-		return nil, fmt.Errorf("extraction failed: empty response from model")
-	}
-
-	var responseText string
-	for _, block := range resp.Content {
-		if block.Type == "text" {
-			responseText = block.Text
-			break
-		}
-	}
-	if responseText == "" {
-		return nil, fmt.Errorf("extraction failed: no text block in model response")
-	}
-
-	// 5. Parse and validate the response.
-	data, err := parseResponse(responseText, req.Fields)
+	// 4. Parse and validate the response.
+	data, err := parseResponse(resp.Text, req.Fields)
 	if err != nil {
 		return nil, err
 	}
 
-	// 6. Build the result.
+	// 5. Build the result.
 	return &ExtractionResult{
 		URL:         req.URL,
 		ContentType: content.ContentType,
 		ExtractedAt: time.Now(),
 		Data:        data,
 		RawContent:  content.RawText,
-		Model:       e.Model,
-		TokensUsed:  int(resp.Usage.InputTokens + resp.Usage.OutputTokens),
+		Model:       resp.Model,
+		TokensUsed:  resp.TokensUsed,
 	}, nil
 }
 
