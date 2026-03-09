@@ -11,6 +11,7 @@ import (
 	"github.com/humzakhan/recap/internal/config"
 	"github.com/humzakhan/recap/internal/extractor"
 	"github.com/humzakhan/recap/internal/fetcher"
+	"github.com/humzakhan/recap/internal/server"
 	"github.com/humzakhan/recap/internal/template"
 )
 
@@ -336,8 +337,26 @@ func serveCmd() *cobra.Command {
 		Use:   "serve",
 		Short: "Start the HTTP API server",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Printf("Server not yet implemented, will listen on %s:%d\n", host, port)
-			return nil
+			cfg, err := config.Load()
+			if err != nil {
+				return fmt.Errorf("loading config: %w", err)
+			}
+
+			// Override config with CLI flags if provided.
+			if cmd.Flags().Changed("port") {
+				cfg.Server.Port = port
+			}
+			if cmd.Flags().Changed("host") {
+				cfg.Server.Host = host
+			}
+
+			if cfg.AnthropicAPIKey == "" {
+				return fmt.Errorf("no API key configured; set RECAP_ANTHROPIC_KEY or configure via ~/.recap/config.yaml")
+			}
+
+			fmt.Printf("Starting server on %s:%d\n", cfg.Server.Host, cfg.Server.Port)
+			srv := server.New(cfg)
+			return srv.Run()
 		},
 	}
 
