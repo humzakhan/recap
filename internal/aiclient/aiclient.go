@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/humzakhan/recap/internal/log"
 )
 
 // AIClient is the interface that all LLM providers must implement.
@@ -47,8 +49,19 @@ func New(cfg ProviderConfig) (AIClient, error) {
 	}
 
 	if cfg.APIKey == "" {
-		return nil, fmt.Errorf("no API key configured for provider %q", provider)
+		hint := ""
+		switch provider {
+		case ProviderAnthropic:
+			hint = "\n  Set RECAP_ANTHROPIC_KEY or add api_keys.anthropic to ~/.recap/config.yaml"
+		case ProviderOpenAI:
+			hint = "\n  Set RECAP_OPENAI_KEY or add api_keys.openai to ~/.recap/config.yaml"
+		case ProviderGoogle:
+			hint = "\n  Set RECAP_GOOGLE_KEY or add api_keys.google to ~/.recap/config.yaml"
+		}
+		return nil, fmt.Errorf("no API key configured for provider %q%s", provider, hint)
 	}
+
+	log.Debug("aiclient: creating %s client for model %q", provider, cfg.Model)
 
 	switch strings.ToLower(provider) {
 	case ProviderAnthropic:
@@ -58,7 +71,7 @@ func New(cfg ProviderConfig) (AIClient, error) {
 	case ProviderGoogle:
 		return NewGoogleClient(cfg.APIKey, cfg.Model), nil
 	default:
-		return nil, fmt.Errorf("unsupported AI provider: %q", provider)
+		return nil, fmt.Errorf("unsupported AI provider: %q\n  Supported providers: anthropic, openai, google\n  Run 'recap config models' to see available models", provider)
 	}
 }
 

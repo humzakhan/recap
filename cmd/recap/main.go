@@ -14,6 +14,7 @@ import (
 	"github.com/humzakhan/recap/internal/config"
 	"github.com/humzakhan/recap/internal/extractor"
 	"github.com/humzakhan/recap/internal/fetcher"
+	"github.com/humzakhan/recap/internal/log"
 	"github.com/humzakhan/recap/internal/server"
 	"github.com/humzakhan/recap/internal/template"
 )
@@ -27,18 +28,26 @@ func (f fetcherAdapter) Fetch(ctx context.Context, rawURL string) (*extractor.Fe
 
 func main() {
 	if err := rootCmd().Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
 func rootCmd() *cobra.Command {
+	var verbose bool
+
 	root := &cobra.Command{
 		Use:   "recap",
 		Short: "Extract structured data from any URL",
 		Long:  "recap is a CLI + web app that extracts structured, user-defined fields from any URL using an LLM.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			log.SetVerbose(verbose)
+		},
 	}
+
+	root.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose debug output")
 
 	root.AddCommand(runCmd())
 	root.AddCommand(templateCmd())
@@ -88,27 +97,35 @@ func runCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			url := args[0]
+			log.Debug("run: starting extraction for %q", url)
 
 			// Parse fields from flag.
 			parsed, err := ParseFields(fieldsFlag)
 			if err != nil {
-				return fmt.Errorf("parsing fields: %w", err)
+				return fmt.Errorf("invalid --fields syntax: %w\n  Expected format: \"title,author:text,tags:list,sentiment:enum[pos,neg]\"", err)
 			}
 
 			// Load template if specified.
 			var templateFields []extractor.Field
 			if templateFlag != "" {
+				log.Debug("run: loading template %q", templateFlag)
 				tmpl, err := template.LoadTemplate(templateFlag)
 				if err != nil {
-					return fmt.Errorf("loading template: %w", err)
+					return fmt.Errorf("template %q not found: %w\n  Run 'recap template list' to see available templates", templateFlag, err)
 				}
 				templateFields = tmpl.Fields
+				log.Debug("run: template %q loaded with %d fields", templateFlag, len(templateFields))
 			}
 
 			// Merge template fields with parsed fields.
 			fields := extractor.MergeFields(templateFields, parsed)
 			if len(fields) == 0 {
-				return fmt.Errorf("no fields specified; use --fields or --template")
+				return fmt.Errorf("no fields specified\n  Use --fields \"title,author,tags:list\" or --template news-article")
+			}
+
+			log.Debug("run: %d fields to extract", len(fields))
+			for _, f := range fields {
+				log.Debug("run:   - %s (%s)", f.Label, f.Type)
 			}
 
 			// Load config.
@@ -116,6 +133,7 @@ func runCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("loading config: %w", err)
 			}
+			log.Debug("run: config loaded (model=%s, max_tokens=%d)", cfg.Model, cfg.MaxTokens)
 
 			// Build AI client.
 			client, err := buildAIClient(cfg)
@@ -130,6 +148,7 @@ func runCmd() *cobra.Command {
 			}
 
 			// Create extractor and run.
+			log.Debug("run: starting extraction (format=%s)", format)
 			ext := extractor.NewExtractor(fetcherAdapter{}, client, cfg.MaxTokens)
 			result, err := ext.Extract(context.Background(), extractor.ExtractionRequest{
 				URL:    url,
@@ -137,8 +156,9 @@ func runCmd() *cobra.Command {
 				Format: format,
 			})
 			if err != nil {
-				return fmt.Errorf("extraction failed: %w", err)
+				return err
 			}
+			log.Debug("run: extraction complete, formatting as %s", format)
 
 			// Format output.
 			var output string
