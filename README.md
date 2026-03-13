@@ -1,3 +1,7 @@
+![recap banner](assets/banner.png)
+
+---
+
 # recap
 
 Point recap at any URL — a news article, a YouTube video, a PDF, a blog post — and tell it exactly what you want to know. Instead of reading the whole thing, copying text into a chat window, or writing a scraper that breaks next week, you define the fields you care about (author, key takeaways, sentiment, publication date) and recap extracts them into clean, structured data.
